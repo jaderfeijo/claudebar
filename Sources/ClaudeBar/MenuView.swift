@@ -13,17 +13,16 @@ struct MenuView: View {
             } else {
                 connect
             }
-            Divider().padding(.horizontal, 12)
+            Divider().padding(.horizontal, 17)
             footer
         }
         .frame(width: 280)
-        .onAppear { Task { await model.refresh() } }
     }
 
     // MARK: - Connected
 
     private var usage: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Claude Usage").font(.headline)
                 if model.stale {
@@ -36,7 +35,7 @@ struct MenuView: View {
                 Text("Loading…").font(.subheadline).foregroundStyle(.secondary)
             }
             ForEach(model.windows) { w in
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 7) {
                     HStack(alignment: .firstTextBaseline) {
                         Text(w.label).font(.subheadline)
                         Spacer()
@@ -47,18 +46,21 @@ struct MenuView: View {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             Capsule().fill(.quaternary)
+                            // never narrower than a dot, so 0% still reads as a bar
                             Capsule().fill(w.color)
-                                .frame(width: geo.size.width * min(w.utilization, 100) / 100)
+                                .frame(width: max(geo.size.height, geo.size.width * min(w.utilization, 100) / 100))
                         }
                     }
-                    .frame(height: 4)
+                    .frame(height: 5)
                     if let reset = w.resetText {
                         Text(reset).font(.caption).foregroundStyle(.secondary)
                     }
                 }
             }
         }
-        .padding(12)
+        .padding(.horizontal, 17)
+        .padding(.top, 16)
+        .padding(.bottom, 18)
     }
 
     // MARK: - Connect
@@ -88,7 +90,9 @@ struct MenuView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(12)
+        .padding(.horizontal, 17)
+        .padding(.top, 16)
+        .padding(.bottom, 18)
     }
 
     private func submit() {
@@ -100,20 +104,26 @@ struct MenuView: View {
     // MARK: - Footer
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             Button {
                 launchAtLogin.toggle()
                 try? launchAtLogin ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
             } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: launchAtLogin ? "checkmark.square.fill" : "square")
-                    Text("Launch at login")
+                HStack(spacing: 6) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                            .fill(.primary.opacity(0.22))
+                        if launchAtLogin {
+                            Image(systemName: "checkmark").font(.system(size: 9, weight: .heavy))
+                        }
+                    }
+                    .frame(width: 15, height: 15)
+                    Text("Launch at login").font(.system(size: 9))
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 footerButton("Refresh") { Task { await model.refresh() } }
                 footerButton("Dashboard") {
                     NSWorkspace.shared.open(URL(string: "https://claude.ai/settings/usage")!)
@@ -125,13 +135,16 @@ struct MenuView: View {
                 footerButton("Quit") { NSApp.terminate(nil) }
             }
         }
-        .padding(12)
+        .padding(.horizontal, 17)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
     }
 
     private func footerButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(title, action: action)
             .buttonStyle(.plain)
-            .font(.caption)
+            .font(.system(size: 9))
             .foregroundStyle(.secondary)
+            .fixedSize()
     }
 }

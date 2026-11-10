@@ -1,6 +1,6 @@
 # ClaudeBar
 
-A native macOS menu bar app that shows your Claude usage limits: session (5-hour), weekly, and weekly Opus. The same numbers you see on the claude.ai dashboard and in Claude Code's `/usage` command.
+A native macOS menu bar app that shows your Claude usage limits: session (5-hour), weekly and extra usage, plus weekly Opus when your plan has it. The same numbers you see on the claude.ai dashboard and in Claude Code's `/usage` command.
 
 ![ClaudeBar popover](docs/screenshot.png)
 

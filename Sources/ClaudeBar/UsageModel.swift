@@ -17,21 +17,23 @@ final class UsageModel: ObservableObject {
     @Published var pendingAuth: OAuth.PKCE?
 
     private var timer: Timer?
-    private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
-    private static let knownLabels: [(key: String, label: String)] = [
-        ("five_hour", "Session (5h)"),
-        ("seven_day", "Weekly"),
-        ("seven_day_opus", "Weekly · Opus"),
+    private nonisolated static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
+    // `always` rows show at 0% when the API reports no data (e.g. no active session)
+    private static let knownLabels: [(key: String, label: String, always: Bool)] = [
+        ("five_hour", "Session (5h)", true),
+        ("seven_day", "Weekly", true),
+        ("seven_day_opus", "Weekly · Opus", false),
+        ("extra_usage", "Extra Usage", true),
     ]
 
-    init() {
+    /// `live: false` skips fetching — used to render mock data.
+    init(live: Bool = true) {
+        guard live else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             Task { await self?.refresh() }
         }
         Task { await refresh() }
     }
-
-    var highestUtilization: Double? { windows.map(\.utilization).max() }
 
     // MARK: - Connect flow
 
@@ -63,18 +65,23 @@ final class UsageModel: ObservableObject {
 
     // MARK: - Fetch
 
+    /// Raw usage JSON and HTTP status, refreshing the token first if needed. Nil when not connected.
+    nonisolated static func fetchUsage() async throws -> (data: Data, status: Int)? {
+        guard var token = Token.load() else { return nil }
+        if token.needsRefresh {
+            token = try await OAuth.refresh(token)
+        }
+        var req = URLRequest(url: usageURL)
+        req.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "Authorization")
+        req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
+        req.setValue("claude-code/1.0.119", forHTTPHeaderField: "User-Agent")
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        return (data, (resp as? HTTPURLResponse)?.statusCode ?? 0)
+    }
+
     func refresh() async {
-        guard var token = Token.load() else { connected = false; return }
         do {
-            if token.needsRefresh {
-                token = try await OAuth.refresh(token)
-            }
-            var req = URLRequest(url: Self.usageURL)
-            req.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "Authorization")
-            req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-            req.setValue("claude-code/1.0.119", forHTTPHeaderField: "User-Agent")
-            let (data, resp) = try await URLSession.shared.data(for: req)
-            let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            guard let (data, status) = try await Self.fetchUsage() else { connected = false; return }
             if status == 401 || status == 403 {
                 connected = false
                 lastError = "Session expired — reconnect your account."
@@ -96,15 +103,16 @@ final class UsageModel: ObservableObject {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
         var result: [UsageWindow] = []
         var seen = Set<String>()
-        func window(_ key: String, _ label: String) -> UsageWindow? {
-            guard let obj = json[key] as? [String: Any],
-                  let utilization = obj["utilization"] as? Double else { return nil }
+        func window(_ key: String, _ label: String, always: Bool = false) -> UsageWindow? {
+            let obj = json[key] as? [String: Any]
+            guard let utilization = obj?["utilization"] as? Double ?? (always ? 0 : nil) else { return nil }
             return UsageWindow(id: key, label: label,
                                utilization: utilization,
-                               resetsAt: (obj["resets_at"] as? String).flatMap(parseDate))
+                               resetsAt: (obj?["resets_at"] as? String).flatMap(parseDate))
         }
-        for (key, label) in knownLabels {
-            if let w = window(key, label) { result.append(w); seen.insert(key) }
+        for (key, label, always) in knownLabels {
+            if let w = window(key, label, always: always) { result.append(w) }
+            seen.insert(key)
         }
         // future windows the API may add
         for key in json.keys.sorted() where !seen.contains(key) {

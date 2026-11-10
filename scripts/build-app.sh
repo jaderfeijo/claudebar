@@ -7,8 +7,9 @@ swift build -c release
 
 APP=ClaudeBar.app
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/ClaudeBar "$APP/Contents/MacOS/"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -16,6 +17,7 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key><string>ClaudeBar</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleIdentifier</key><string>com.claudebar.app</string>
     <key>CFBundleName</key><string>ClaudeBar</string>
     <key>CFBundleDisplayName</key><string>ClaudeBar</string>
